@@ -1,0 +1,119 @@
+from flask import Flask,url_for,request,render_template,redirect,session
+import sqlite3
+from werkzeug.utils import secure_filename
+import os
+import pytesseract
+from PIL import ImageFilter
+from PIL import Image
+import datetime
+app=Flask(_name_)
+app.config['UPLOAD_FOLDER'] = './media'
+app.secret_key="Rudy"
+vnumlist=[]
+parkingslot=[]
+slotname=None
+slotnamelist=[]
+pytesseract.pytesseract.tesseract_cmd=r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+@app.route('/',methods=["GET","POST"])
+def login():
+username=None
+password=None
+err="Invalid username and password"
+if request.method=='POST':
+session['username']=request.form['uname']
+session['vid']=request.form['pwd']
+username=request.form['uname']
+password=request.form['pwd']
+conn = sqlite3.connect("carparking.db")
+r=conn.cursor()
+r.execute("select name,pwd from userregister where name=? and pwd=?",(username,password))
+rows=r.fetchall()
+if username=='Admin' and password=='Admin':
+return redirect(url_for('Admin'))
+else:
+if len(rows)!=0:
+for i in rows:
+if i[0]==username and i[1]==password:
+return redirect(url_for('userpage'))
+#return render_template('user.html',username=username)
+else:
+return render_template('login.html',err=err)
+else:
+return render_template('login.html',err=err)
+return render_template('login.html')
+@app.route('/reg',methods=["GET","POST"])
+def reg():
+uname=None
+pwd=None
+phn=None
+ema=None
+vtype=None
+vnum=None
+msg="Register successfully"
+if request.method=='POST':
+uname=request.form['txt']
+pwd=request.form['passw']
+phn=request.form['phn']
+ema=request.form['ema']
+vtype=request.form['vtype']
+vnum=request.form['vnum']
+try:
+import sqlite3
+table_name = 'userregister'
+conn = sqlite3.connect("carparking.db")
+c = conn.cursor()
+c.execute('create table if not exists ' + table_name + ' (name 
+varchar(50),pwd varchar(50) primary key,phn varchar(50),ema varchar(50),vtype 
+varchar(50),vnum varchar(50))')
+c.execute('insert into '+table_name+' values (?,?,?,?,?,?)',(uname,pwd,phn,ema,vtype,vnum))
+conn.commit()
+conn.close()
+flash("Register successfully")
+except:
+return render_template('registration.html',msg=msg)
+# return render_template('registration.html')
+else:
+return render_template('registration.html')
+return render_template("registration.html")
+@app.route('/userpage',methods=["POST","GET"])
+def userpage():
+err="Your not authorized to park here."
+sloterr="Parking slot was full"
+if request.method=='POST':
+image = request.files['ocrImage']
+text = ''
+filename = secure_filename(image.filename)
+image.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+img = Image.open(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+text = pytesseract.image_to_string(img)
+print(text)
+session["vnumm"]=text.strip()
+conn=sqlite3.connect("carparking.db")
+r=conn.cursor()
+r.execute("select name,phn,vtype,vnum from userregister where vnum=?",(session["vnumm"],))
+rows=r.fetchall()
+li=[]
+if len(rows)!=0:
+if rows[0][3]==session["vnumm"]:
+ss=conn.cursor()
+ss.execute("select slot from parkingslot where 
+status=?",("available",))
+slotrow=ss.fetchall()
+if len(slotrow)!=0:
+for i in slotrow:
+li.append(i)
+session["slot"]=li[0]
+return 
+render_template("user.html",rows=rows,slotrow=session["slot"])
+else:
+return render_template("user.html",rows=rows,err=sloterr)
+else:
+print("noo")
+else:
+return render_template("user.html",err=err)
+return render_template('user.html',text=session["vnumm"])
+else:
+return render_template("user.html")
+return render_template('user.html')
+if _name=='main_':
+app.run(debug=True)
